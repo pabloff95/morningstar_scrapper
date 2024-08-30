@@ -1,0 +1,21 @@
+{
+  "name": "flat_scrapper",
+  "version": "1.0.0",
+  "description": "Webscrapper of flats pricing",
+  "main": "app.js",
+  "scripts": {
+    "start": "node src/app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "flat_scrapper"
+  },
+  "keywords": [
+    "scrapper"
+  ],
+  "author": "Pablo Fernandez",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer": "^23.2.1"
+  }
+}
