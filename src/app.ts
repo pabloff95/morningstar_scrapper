@@ -1,9 +1,9 @@
-import scrapIdealista from "./scrappers/idealista.js";
+import scrapMorningstar from "./scrappers/morningstar.js";
 
 const initialiseScrapper: () => void = async () => {
   console.log("Initialising app...");
 
-  await scrapIdealista();
+  await scrapMorningstar("EXV4");
 
   console.log("The app was executed successfully");
 };

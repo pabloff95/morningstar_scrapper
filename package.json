@@ -1,7 +1,7 @@
 {
-  "name": "flat_scrapper",
+  "name": "morningstar_scrapper",
   "version": "1.0.0",
-  "description": "Webscrapper of flats pricing",
+  "description": "Webscrapper of stocks information",
   "main": "dist/app.js",
   "type": "module",
   "scripts": {
