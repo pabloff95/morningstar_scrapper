@@ -98,7 +98,7 @@ const scrapMorningstar: (stock: string) => Promise<StockInformation> = async (
     })
   );
 
-  await page.screenshot({ path: "./output/screenshot.png" });
+  await page.screenshot({ path: "./output/screenshot.png" }); // TODO: keep this only temporary for debugging purposes, remove when finished
 
   await browser.close();
 

@@ -1,8 +1,8 @@
 import scrapMorningstar from "./scrappers/morningstar.js";
+import stockInformationToJson from "./utils/sock-information-to-json.js";
 const initialiseScrapper = async () => {
-    console.log("Initialising app...");
-    const stockInformation = await scrapMorningstar("EXV4");
-    console.log(stockInformation);
-    console.log("The app was executed successfully");
+    const stockTicket = "EXV4";
+    const stockInformation = await scrapMorningstar(stockTicket);
+    stockInformationToJson({ stockInformation, stockTicket });
 };
 initialiseScrapper();
