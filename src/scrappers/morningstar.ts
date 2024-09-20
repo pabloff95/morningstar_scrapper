@@ -30,6 +30,19 @@ const SELECTORS: Selectors = {
         sector: 4,
       },
     },
+    assetsInTopTenHoldings:
+      ".mdc-fund-top-holdings__summary-item__mdc > span >.mdc-data-point--number",
+    portfolio: {
+      linkButton: "li#etf__tab-portfolio > a",
+      country: {
+        button: "button#country",
+        row: "table.sal-country-exposure__country-table > tbody > tr",
+        companyCell: {
+          country: 1,
+          percentage: 2,
+        },
+      },
+    },
   },
 };
 
@@ -39,10 +52,17 @@ type company = {
   sector: string;
 };
 
+type countryWeight = {
+  name: string;
+  percentage: number;
+};
+
 interface StockInformation {
   name: string;
   ticket: string;
   holdings: company[];
+  assetsInTopTenHoldings: number;
+  topHoldingCountries: countryWeight[];
 }
 
 const cleanString = (text: string | null | undefined): string => {
@@ -60,6 +80,8 @@ const scrapMorningstar: (
     name: "",
     ticket: stockTicket,
     holdings: [],
+    assetsInTopTenHoldings: 0,
+    topHoldingCountries: [],
   };
 
   const browser: Browser = await puppeteer.launch({
@@ -121,6 +143,55 @@ const scrapMorningstar: (
           : "",
       };
     })
+  );
+  stockInformation.holdings.sort(
+    (a, b) => b.portfolioWeight - a.portfolioWeight
+  );
+
+  // 3 - Assets on top 10 holdings
+  await page.waitForSelector(SELECTORS.stockPage.assetsInTopTenHoldings);
+  stockInformation.assetsInTopTenHoldings = await page
+    .evaluate(
+      (element) => element?.textContent,
+      await page.$(SELECTORS.stockPage.assetsInTopTenHoldings)
+    )
+    .then((assetsPercentage) => parseFloat(assetsPercentage || ""));
+
+  // 4 - Navigate to portfolio sub-tab and get the country weights
+  await page.click(SELECTORS.stockPage.portfolio.linkButton);
+
+  await page.waitForSelector(SELECTORS.stockPage.portfolio.country.button);
+
+  const countryButton = await page.$(
+    SELECTORS.stockPage.portfolio.country.button
+  );
+  await countryButton?.evaluate((b: any) => b.click());
+
+  await page.waitForSelector(SELECTORS.stockPage.portfolio.country.row);
+  const topCountriesRows = await page.$$(
+    SELECTORS.stockPage.portfolio.country.row
+  );
+
+  stockInformation.topHoldingCountries = await Promise.all(
+    topCountriesRows.map(async (row) => {
+      const countryName = await row.$(
+        `td:nth-child(${SELECTORS.stockPage.portfolio.country.companyCell.country})`
+      );
+      const countryPercentage = await row.$(
+        `td:nth-child(${SELECTORS.stockPage.portfolio.country.companyCell.percentage})`
+      );
+      return {
+        name: countryName
+          ? await countryName.evaluate((el) => el.innerText)
+          : "",
+        percentage: countryPercentage
+          ? parseFloat(await countryPercentage.evaluate((el) => el.innerText))
+          : 0,
+      };
+    })
+  );
+  stockInformation.topHoldingCountries.sort(
+    (a, b) => b.percentage - a.percentage
   );
 
   await page.screenshot({ path: "./output/screenshot.png" }); // TODO: keep this only temporary for debugging purposes, remove when finished
