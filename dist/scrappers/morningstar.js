@@ -8,6 +8,7 @@ const SELECTORS = {
         stockLink: ".search-all__hit > a",
     },
     stockPage: {
+        stockName: "header > div > div > h1",
         topHoldingCompany: {
             row: "tbody > tr:has(> td > a)",
             companyCell: {
@@ -18,8 +19,18 @@ const SELECTORS = {
         },
     },
 };
-const scrapMorningstar = async (stock) => {
-    const stockInformation = {};
+const cleanString = (text) => {
+    if (!text) {
+        return "";
+    }
+    return text.replace(/\s+/g, " ").trim();
+};
+const scrapMorningstar = async (stockTicket) => {
+    const stockInformation = {
+        name: "",
+        ticket: stockTicket,
+        holdings: [],
+    };
     const browser = await puppeteer.launch({
         headless: false,
         defaultViewport: null,
@@ -29,13 +40,18 @@ const scrapMorningstar = async (stock) => {
     await page.goto("https://www.morningstar.com/");
     await page.waitForSelector(SELECTORS.homePage.searchInput);
     await page.click(SELECTORS.homePage.searchInput);
-    await page.type(SELECTORS.homePage.searchInput, stock);
+    await page.type(SELECTORS.homePage.searchInput, stockTicket);
     await page.keyboard.press("Enter");
     // Click on search list item
     await page.waitForSelector(SELECTORS.searchPage.stockLink);
     await page.click(SELECTORS.searchPage.stockLink);
     // Collect data from the stock page
-    // 1 - Top holding companies
+    // 1- Title
+    await page.waitForSelector(SELECTORS.stockPage.stockName);
+    stockInformation.name = await page
+        .evaluate((element) => element === null || element === void 0 ? void 0 : element.textContent, await page.$(SELECTORS.stockPage.stockName))
+        .then((name) => cleanString(name));
+    // 2 - Top holding companies
     await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
     const topHoldingCompanyRows = await page.$$(SELECTORS.stockPage.topHoldingCompany.row);
     stockInformation.holdings = await Promise.all(topHoldingCompanyRows.map(async (row) => {

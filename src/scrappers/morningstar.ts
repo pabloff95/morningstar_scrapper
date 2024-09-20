@@ -21,6 +21,7 @@ const SELECTORS: Selectors = {
     stockLink: ".search-all__hit > a",
   },
   stockPage: {
+    stockName: "header > div > div > h1",
     topHoldingCompany: {
       row: "tbody > tr:has(> td > a)",
       companyCell: {
@@ -39,13 +40,27 @@ type company = {
 };
 
 interface StockInformation {
-  [holdings: string]: company[];
+  name: string;
+  ticket: string;
+  holdings: company[];
 }
 
-const scrapMorningstar: (stock: string) => Promise<StockInformation> = async (
-  stock
-) => {
-  const stockInformation: StockInformation = {};
+const cleanString = (text: string | null | undefined): string => {
+  if (!text) {
+    return "";
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+};
+
+const scrapMorningstar: (
+  stockTicket: string
+) => Promise<StockInformation> = async (stockTicket) => {
+  const stockInformation: StockInformation = {
+    name: "",
+    ticket: stockTicket,
+    holdings: [],
+  };
 
   const browser: Browser = await puppeteer.launch({
     headless: false,
@@ -57,7 +72,7 @@ const scrapMorningstar: (stock: string) => Promise<StockInformation> = async (
   await page.goto("https://www.morningstar.com/");
   await page.waitForSelector(SELECTORS.homePage.searchInput);
   await page.click(SELECTORS.homePage.searchInput);
-  await page.type(SELECTORS.homePage.searchInput, stock);
+  await page.type(SELECTORS.homePage.searchInput, stockTicket);
   await page.keyboard.press("Enter");
 
   // Click on search list item
@@ -65,7 +80,17 @@ const scrapMorningstar: (stock: string) => Promise<StockInformation> = async (
   await page.click(SELECTORS.searchPage.stockLink);
 
   // Collect data from the stock page
-  // 1 - Top holding companies
+  // 1- Title
+  await page.waitForSelector(SELECTORS.stockPage.stockName);
+
+  stockInformation.name = await page
+    .evaluate(
+      (element) => element?.textContent,
+      await page.$(SELECTORS.stockPage.stockName)
+    )
+    .then((name) => cleanString(name));
+
+  // 2 - Top holding companies
   await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
   const topHoldingCompanyRows = await page.$$(
     SELECTORS.stockPage.topHoldingCompany.row
