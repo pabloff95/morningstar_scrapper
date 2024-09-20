@@ -32,6 +32,7 @@ const SELECTORS: Selectors = {
     },
     assetsInTopTenHoldings:
       ".mdc-fund-top-holdings__summary-item__mdc > span >.mdc-data-point--number",
+    dividendStrategy: ".sal-snap-panel:nth-of-type(8) .sal-dp-value",
     portfolio: {
       linkButton: "li#etf__tab-portfolio > a",
       country: {
@@ -42,6 +43,7 @@ const SELECTORS: Selectors = {
           percentage: 2,
         },
       },
+      totalHoldings: "div.holdings-summary:nth-of-type(1) .sal-dp-value",
     },
   },
 };
@@ -57,9 +59,19 @@ type countryWeight = {
   percentage: number;
 };
 
+enum dividendStrategy {
+  DIST = "DIST",
+  ACC = "ACC",
+}
+
 interface StockInformation {
   name: string;
   ticket: string;
+  dividend: {
+    strategy: dividendStrategy | null;
+    yield: number | null;
+  };
+  totalHoldings: number;
   holdings: company[];
   assetsInTopTenHoldings: number;
   topHoldingCountries: countryWeight[];
@@ -79,6 +91,11 @@ const scrapMorningstar: (
   const stockInformation: StockInformation = {
     name: "",
     ticket: stockTicket,
+    dividend: {
+      strategy: null,
+      yield: null,
+    },
+    totalHoldings: 0,
     holdings: [],
     assetsInTopTenHoldings: 0,
     topHoldingCountries: [],
@@ -102,7 +119,7 @@ const scrapMorningstar: (
   await page.click(SELECTORS.searchPage.stockLink);
 
   // Collect data from the stock page
-  // 1- Title
+  // - Title
   await page.waitForSelector(SELECTORS.stockPage.stockName);
 
   stockInformation.name = await page
@@ -112,7 +129,28 @@ const scrapMorningstar: (
     )
     .then((name) => cleanString(name));
 
-  // 2 - Top holding companies
+  // - Dividend strategy and yield
+  await page.waitForSelector(SELECTORS.stockPage.dividendStrategy);
+
+  const dividendTwelveMonthsYield: string = await page
+    .evaluate(
+      (element) => element?.textContent,
+      await page.$(SELECTORS.stockPage.dividendStrategy)
+    )
+    .then((text) => cleanString(text));
+
+  stockInformation.dividend = {
+    strategy:
+      dividendTwelveMonthsYield === "—"
+        ? dividendStrategy.DIST
+        : dividendStrategy.ACC,
+    yield:
+      dividendTwelveMonthsYield === "—"
+        ? null
+        : parseFloat(dividendTwelveMonthsYield),
+  };
+
+  // - Top holding companies
   await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
   const topHoldingCompanyRows = await page.$$(
     SELECTORS.stockPage.topHoldingCompany.row
@@ -148,7 +186,7 @@ const scrapMorningstar: (
     (a, b) => b.portfolioWeight - a.portfolioWeight
   );
 
-  // 3 - Assets on top 10 holdings
+  // - Assets on top 10 holdings
   await page.waitForSelector(SELECTORS.stockPage.assetsInTopTenHoldings);
   stockInformation.assetsInTopTenHoldings = await page
     .evaluate(
@@ -157,7 +195,7 @@ const scrapMorningstar: (
     )
     .then((assetsPercentage) => parseFloat(assetsPercentage || ""));
 
-  // 4 - Navigate to portfolio sub-tab and get the country weights
+  // - Navigate to portfolio sub-tab and get the country weights
   await page.click(SELECTORS.stockPage.portfolio.linkButton);
 
   await page.waitForSelector(SELECTORS.stockPage.portfolio.country.button);
@@ -193,6 +231,16 @@ const scrapMorningstar: (
   stockInformation.topHoldingCountries.sort(
     (a, b) => b.percentage - a.percentage
   );
+
+  // - Get total holdings
+  await page.waitForSelector(SELECTORS.stockPage.portfolio.totalHoldings);
+
+  stockInformation.totalHoldings = await page
+    .evaluate(
+      (element) => element?.textContent,
+      await page.$(SELECTORS.stockPage.portfolio.totalHoldings)
+    )
+    .then((name) => parseInt(name || ""));
 
   await page.screenshot({ path: "./output/screenshot.png" }); // TODO: keep this only temporary for debugging purposes, remove when finished
 
