@@ -1,5 +1,11 @@
 import puppeteer, { Browser, Page } from "puppeteer";
-import { getText, getNumber, navigateToPage } from "../utils/handle-page.js";
+import {
+  getText,
+  getNumber,
+  navigateToPage,
+  getCellsTextFromTableRows,
+  CellData,
+} from "../utils/handle-page.js";
 
 interface Selectors {
   homePage: {
@@ -62,17 +68,6 @@ const SELECTORS: Selectors = {
   },
 };
 
-type company = {
-  name: string;
-  portfolioWeight: number;
-  sector: string;
-};
-
-type countryWeight = {
-  name: string;
-  percentage: number;
-};
-
 enum dividendStrategy {
   DIST = "DIST",
   ACC = "ACC",
@@ -94,19 +89,11 @@ interface StockInformation {
     yield: number | null;
   };
   totalHoldings: number;
-  holdings: company[];
+  holdings: CellData[];
   assetsInTopTenHoldings: number;
-  topHoldingCountries: countryWeight[];
+  topHoldingCountries: CellData[];
   performance: performance;
 }
-
-const cleanString = (text: string | null | undefined): string => {
-  if (!text) {
-    return "";
-  }
-
-  return text.replace(/\s+/g, " ").trim();
-};
 
 const scrapMorningstar: (
   stockTicket: string
@@ -173,40 +160,16 @@ const scrapMorningstar: (
   };
 
   // - Top holding companies
-  await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
-  const topHoldingCompanyRows = await page.$$(
-    SELECTORS.stockPage.topHoldingCompany.row
-  );
-
-  stockInformation.holdings = await Promise.all(
-    topHoldingCompanyRows.map(async (row) => {
-      const companyName = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.name})`
-      );
-      const companyPortfolioWeight = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.weight})`
-      );
-      const companySector = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.sector})`
-      );
-      return {
-        name: companyName
-          ? await companyName.evaluate((el) => el.innerText)
-          : "",
-        portfolioWeight: companyPortfolioWeight
-          ? parseFloat(
-              await companyPortfolioWeight.evaluate((el) => el.innerText)
-            )
-          : 0,
-        sector: companySector
-          ? await companySector.evaluate((el) => el.innerText)
-          : "",
-      };
-    })
-  );
-  stockInformation.holdings.sort(
-    (a, b) => b.portfolioWeight - a.portfolioWeight
-  );
+  stockInformation.holdings = await getCellsTextFromTableRows({
+    page,
+    rowSelector: SELECTORS.stockPage.topHoldingCompany.row,
+    cellSelectors: {
+      name: SELECTORS.stockPage.topHoldingCompany.cell.name,
+      portfolioWeight: SELECTORS.stockPage.topHoldingCompany.cell.weight,
+      sector: SELECTORS.stockPage.topHoldingCompany.cell.sector,
+    },
+    orderByKey: "portfolioWeight",
+  });
 
   // - Assets on top 10 holdings
   stockInformation.assetsInTopTenHoldings = await getNumber({
@@ -281,32 +244,15 @@ const scrapMorningstar: (
   );
   await countryButton?.evaluate((b: any) => b.click());
 
-  await page.waitForSelector(SELECTORS.stockPage.portfolio.country.row);
-  const topCountriesRows = await page.$$(
-    SELECTORS.stockPage.portfolio.country.row
-  );
-
-  stockInformation.topHoldingCountries = await Promise.all(
-    topCountriesRows.map(async (row) => {
-      const countryName = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.country})`
-      );
-      const countryPercentage = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.percentage})`
-      );
-      return {
-        name: countryName
-          ? await countryName.evaluate((el) => el.innerText)
-          : "",
-        percentage: countryPercentage
-          ? parseFloat(await countryPercentage.evaluate((el) => el.innerText))
-          : 0,
-      };
-    })
-  );
-  stockInformation.topHoldingCountries.sort(
-    (a, b) => b.percentage - a.percentage
-  );
+  stockInformation.topHoldingCountries = await getCellsTextFromTableRows({
+    page,
+    rowSelector: SELECTORS.stockPage.portfolio.country.row,
+    cellSelectors: {
+      name: SELECTORS.stockPage.portfolio.country.cell.country,
+      percentage: SELECTORS.stockPage.portfolio.country.cell.percentage,
+    },
+    orderByKey: "topHoldingCountries",
+  });
 
   // - Get total holdings
   stockInformation.totalHoldings = await getNumber({

@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { getText, getNumber, navigateToPage } from "../utils/handle-page.js";
+import { getText, getNumber, navigateToPage, getCellsTextFromTableRows, } from "../utils/handle-page.js";
 const SELECTORS = {
     homePage: {
         headerImage: 'a[href="/"] > img',
@@ -112,25 +112,49 @@ const scrapMorningstar = async (stockTicket) => {
             : parseFloat(dividendTwelveMonthsYield),
     };
     // - Top holding companies
-    await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
-    const topHoldingCompanyRows = await page.$$(SELECTORS.stockPage.topHoldingCompany.row);
-    stockInformation.holdings = await Promise.all(topHoldingCompanyRows.map(async (row) => {
-        const companyName = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.name})`);
-        const companyPortfolioWeight = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.weight})`);
-        const companySector = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.sector})`);
-        return {
-            name: companyName
-                ? await companyName.evaluate((el) => el.innerText)
-                : "",
-            portfolioWeight: companyPortfolioWeight
-                ? parseFloat(await companyPortfolioWeight.evaluate((el) => el.innerText))
-                : 0,
-            sector: companySector
-                ? await companySector.evaluate((el) => el.innerText)
-                : "",
-        };
-    }));
-    stockInformation.holdings.sort((a, b) => b.portfolioWeight - a.portfolioWeight);
+    // await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
+    // const topHoldingCompanyRows = await page.$$(
+    //   SELECTORS.stockPage.topHoldingCompany.row
+    // );
+    // stockInformation.holdings = await Promise.all(
+    //   topHoldingCompanyRows.map(async (row) => {
+    //     const companyName = await row.$(
+    //       `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.name})`
+    //     );
+    //     const companyPortfolioWeight = await row.$(
+    //       `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.weight})`
+    //     );
+    //     const companySector = await row.$(
+    //       `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.sector})`
+    //     );
+    //     return {
+    //       name: companyName
+    //         ? await companyName.evaluate((el) => el.innerText)
+    //         : "",
+    //       portfolioWeight: companyPortfolioWeight
+    //         ? parseFloat(
+    //             await companyPortfolioWeight.evaluate((el) => el.innerText)
+    //           )
+    //         : 0,
+    //       sector: companySector
+    //         ? await companySector.evaluate((el) => el.innerText)
+    //         : "",
+    //     };
+    //   })
+    // );
+    // stockInformation.holdings.sort(
+    //   (a, b) => b.portfolioWeight - a.portfolioWeight
+    // );
+    stockInformation.holdings = await getCellsTextFromTableRows({
+        page,
+        rowSelector: SELECTORS.stockPage.topHoldingCompany.row,
+        cellSelectors: {
+            name: SELECTORS.stockPage.topHoldingCompany.cell.name,
+            portfolioWeight: SELECTORS.stockPage.topHoldingCompany.cell.weight,
+            sector: SELECTORS.stockPage.topHoldingCompany.cell.sector,
+        },
+        orderByKey: "portfolioWeight",
+    });
     // - Assets on top 10 holdings
     stockInformation.assetsInTopTenHoldings = await getNumber({
         page,
@@ -176,21 +200,40 @@ const scrapMorningstar = async (stockTicket) => {
     await page.waitForSelector(SELECTORS.stockPage.portfolio.country.button);
     const countryButton = await page.$(SELECTORS.stockPage.portfolio.country.button);
     await (countryButton === null || countryButton === void 0 ? void 0 : countryButton.evaluate((b) => b.click()));
-    await page.waitForSelector(SELECTORS.stockPage.portfolio.country.row);
-    const topCountriesRows = await page.$$(SELECTORS.stockPage.portfolio.country.row);
-    stockInformation.topHoldingCountries = await Promise.all(topCountriesRows.map(async (row) => {
-        const countryName = await row.$(`td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.country})`);
-        const countryPercentage = await row.$(`td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.percentage})`);
-        return {
-            name: countryName
-                ? await countryName.evaluate((el) => el.innerText)
-                : "",
-            percentage: countryPercentage
-                ? parseFloat(await countryPercentage.evaluate((el) => el.innerText))
-                : 0,
-        };
-    }));
-    stockInformation.topHoldingCountries.sort((a, b) => b.percentage - a.percentage);
+    // await page.waitForSelector(SELECTORS.stockPage.portfolio.country.row);
+    // const topCountriesRows = await page.$$(
+    //   SELECTORS.stockPage.portfolio.country.row
+    // );
+    // stockInformation.topHoldingCountries = await Promise.all(
+    //   topCountriesRows.map(async (row) => {
+    //     const countryName = await row.$(
+    //       `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.country})`
+    //     );
+    //     const countryPercentage = await row.$(
+    //       `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.percentage})`
+    //     );
+    //     return {
+    //       name: countryName
+    //         ? await countryName.evaluate((el) => el.innerText)
+    //         : "",
+    //       percentage: countryPercentage
+    //         ? parseFloat(await countryPercentage.evaluate((el) => el.innerText))
+    //         : 0,
+    //     };
+    //   })
+    // );
+    // stockInformation.topHoldingCountries.sort(
+    //   (a, b) => b.percentage - a.percentage
+    // );
+    stockInformation.topHoldingCountries = await getCellsTextFromTableRows({
+        page,
+        rowSelector: SELECTORS.stockPage.portfolio.country.row,
+        cellSelectors: {
+            name: SELECTORS.stockPage.portfolio.country.cell.country,
+            percentage: SELECTORS.stockPage.portfolio.country.cell.percentage,
+        },
+        orderByKey: "topHoldingCountries",
+    });
     // - Get total holdings
     stockInformation.totalHoldings = await getNumber({
         page,
