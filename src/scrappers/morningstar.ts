@@ -4,6 +4,7 @@ import {
   getNumber,
   navigateToPage,
   getCellsTextFromTableRows,
+  getCellsTextFromSingeRow,
   CellData,
 } from "../utils/handle-page.js";
 
@@ -183,53 +184,17 @@ const scrapMorningstar: (
     selector: SELECTORS.stockPage.performance.linkButton,
   });
 
-  await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
-    visible: true,
-  });
-
-  const performanceReturnsRow = await page.$(
-    SELECTORS.stockPage.performance.totalReturn.row
-  );
-
-  stockInformation.performance = await page.evaluate(
-    (element, SELECTORS) => {
-      if (!element) {
-        return {
-          yearOne: "-",
-          yearThree: "-",
-          yearFive: "-",
-          yearTen: "-",
-          yearFifteen: "-",
-        };
-      }
-
-      const yearOne: HTMLElement = element?.querySelector(
-        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearOne})`
-      ) as HTMLElement;
-      const yearThree: HTMLElement = element?.querySelector(
-        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearThree})`
-      ) as HTMLElement;
-      const yearFive: HTMLElement = element?.querySelector(
-        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFive})`
-      ) as HTMLElement;
-      const yearTen: HTMLElement = element?.querySelector(
-        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearTen})`
-      ) as HTMLElement;
-      const yearFifteen: HTMLElement = element?.querySelector(
-        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen})`
-      ) as HTMLElement;
-
-      return {
-        yearOne: yearOne ? parseFloat(yearOne.innerText) : "-",
-        yearThree: yearThree ? parseFloat(yearThree.innerText) : "-",
-        yearFive: yearFive ? parseFloat(yearFive.innerText) : "-",
-        yearTen: yearTen ? parseFloat(yearTen.innerText) : "-",
-        yearFifteen: yearFifteen ? parseFloat(yearFifteen.innerText) : "-",
-      };
+  stockInformation.performance = await getCellsTextFromSingeRow({
+    page,
+    rowSelector: SELECTORS.stockPage.performance.totalReturn.row,
+    cellSelectors: {
+      yearOne: SELECTORS.stockPage.performance.totalReturn.cell.yearOne,
+      yearThree: SELECTORS.stockPage.performance.totalReturn.cell.yearThree,
+      yearFive: SELECTORS.stockPage.performance.totalReturn.cell.yearFive,
+      yearTen: SELECTORS.stockPage.performance.totalReturn.cell.yearTen,
+      yearFifteen: SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen,
     },
-    performanceReturnsRow,
-    SELECTORS
-  );
+  });
 
   // - Navigate to portfolio sub-tab and get the country weights
   await navigateToPage({

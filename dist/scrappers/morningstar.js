@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { getText, getNumber, navigateToPage, getCellsTextFromTableRows, } from "../utils/handle-page.js";
+import { getText, getNumber, navigateToPage, getCellsTextFromTableRows, getCellsTextFromSingeRow, } from "../utils/handle-page.js";
 const SELECTORS = {
     homePage: {
         headerImage: 'a[href="/"] > img',
@@ -52,12 +52,6 @@ var dividendStrategy;
     dividendStrategy["DIST"] = "DIST";
     dividendStrategy["ACC"] = "ACC";
 })(dividendStrategy || (dividendStrategy = {}));
-const cleanString = (text) => {
-    if (!text) {
-        return "";
-    }
-    return text.replace(/\s+/g, " ").trim();
-};
 const scrapMorningstar = async (stockTicket) => {
     const stockInformation = {
         name: "",
@@ -112,39 +106,6 @@ const scrapMorningstar = async (stockTicket) => {
             : parseFloat(dividendTwelveMonthsYield),
     };
     // - Top holding companies
-    // await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
-    // const topHoldingCompanyRows = await page.$$(
-    //   SELECTORS.stockPage.topHoldingCompany.row
-    // );
-    // stockInformation.holdings = await Promise.all(
-    //   topHoldingCompanyRows.map(async (row) => {
-    //     const companyName = await row.$(
-    //       `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.name})`
-    //     );
-    //     const companyPortfolioWeight = await row.$(
-    //       `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.weight})`
-    //     );
-    //     const companySector = await row.$(
-    //       `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.sector})`
-    //     );
-    //     return {
-    //       name: companyName
-    //         ? await companyName.evaluate((el) => el.innerText)
-    //         : "",
-    //       portfolioWeight: companyPortfolioWeight
-    //         ? parseFloat(
-    //             await companyPortfolioWeight.evaluate((el) => el.innerText)
-    //           )
-    //         : 0,
-    //       sector: companySector
-    //         ? await companySector.evaluate((el) => el.innerText)
-    //         : "",
-    //     };
-    //   })
-    // );
-    // stockInformation.holdings.sort(
-    //   (a, b) => b.portfolioWeight - a.portfolioWeight
-    // );
     stockInformation.holdings = await getCellsTextFromTableRows({
         page,
         rowSelector: SELECTORS.stockPage.topHoldingCompany.row,
@@ -165,33 +126,60 @@ const scrapMorningstar = async (stockTicket) => {
         page,
         selector: SELECTORS.stockPage.performance.linkButton,
     });
-    await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
-        visible: true,
+    stockInformation.performance = await getCellsTextFromSingeRow({
+        page,
+        rowSelector: SELECTORS.stockPage.performance.totalReturn.row,
+        cellSelectors: {
+            yearOne: SELECTORS.stockPage.performance.totalReturn.cell.yearOne,
+            yearThree: SELECTORS.stockPage.performance.totalReturn.cell.yearThree,
+            yearFive: SELECTORS.stockPage.performance.totalReturn.cell.yearFive,
+            yearTen: SELECTORS.stockPage.performance.totalReturn.cell.yearTen,
+            yearFifteen: SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen,
+        },
     });
-    const performanceReturnsRow = await page.$(SELECTORS.stockPage.performance.totalReturn.row);
-    stockInformation.performance = await page.evaluate((element, SELECTORS) => {
-        if (!element) {
-            return {
-                yearOne: "-",
-                yearThree: "-",
-                yearFive: "-",
-                yearTen: "-",
-                yearFifteen: "-",
-            };
-        }
-        const yearOne = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearOne})`);
-        const yearThree = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearThree})`);
-        const yearFive = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFive})`);
-        const yearTen = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearTen})`);
-        const yearFifteen = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen})`);
-        return {
-            yearOne: yearOne ? parseFloat(yearOne.innerText) : "-",
-            yearThree: yearThree ? parseFloat(yearThree.innerText) : "-",
-            yearFive: yearFive ? parseFloat(yearFive.innerText) : "-",
-            yearTen: yearTen ? parseFloat(yearTen.innerText) : "-",
-            yearFifteen: yearFifteen ? parseFloat(yearFifteen.innerText) : "-",
-        };
-    }, performanceReturnsRow, SELECTORS);
+    // await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
+    //   visible: true,
+    // });
+    // const performanceReturnsRow = await page.$(
+    //   SELECTORS.stockPage.performance.totalReturn.row
+    // );
+    // stockInformation.performance = await page.evaluate(
+    //   (element, SELECTORS) => {
+    //     if (!element) {
+    //       return {
+    //         yearOne: "-",
+    //         yearThree: "-",
+    //         yearFive: "-",
+    //         yearTen: "-",
+    //         yearFifteen: "-",
+    //       };
+    //     }
+    //     const yearOne: HTMLElement = element?.querySelector(
+    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearOne})`
+    //     ) as HTMLElement;
+    //     const yearThree: HTMLElement = element?.querySelector(
+    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearThree})`
+    //     ) as HTMLElement;
+    //     const yearFive: HTMLElement = element?.querySelector(
+    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFive})`
+    //     ) as HTMLElement;
+    //     const yearTen: HTMLElement = element?.querySelector(
+    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearTen})`
+    //     ) as HTMLElement;
+    //     const yearFifteen: HTMLElement = element?.querySelector(
+    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen})`
+    //     ) as HTMLElement;
+    //     return {
+    //       yearOne: yearOne ? parseFloat(yearOne.innerText) : "-",
+    //       yearThree: yearThree ? parseFloat(yearThree.innerText) : "-",
+    //       yearFive: yearFive ? parseFloat(yearFive.innerText) : "-",
+    //       yearTen: yearTen ? parseFloat(yearTen.innerText) : "-",
+    //       yearFifteen: yearFifteen ? parseFloat(yearFifteen.innerText) : "-",
+    //     };
+    //   },
+    //   performanceReturnsRow,
+    //   SELECTORS
+    // );
     // - Navigate to portfolio sub-tab and get the country weights
     await navigateToPage({
         page,
@@ -200,31 +188,6 @@ const scrapMorningstar = async (stockTicket) => {
     await page.waitForSelector(SELECTORS.stockPage.portfolio.country.button);
     const countryButton = await page.$(SELECTORS.stockPage.portfolio.country.button);
     await (countryButton === null || countryButton === void 0 ? void 0 : countryButton.evaluate((b) => b.click()));
-    // await page.waitForSelector(SELECTORS.stockPage.portfolio.country.row);
-    // const topCountriesRows = await page.$$(
-    //   SELECTORS.stockPage.portfolio.country.row
-    // );
-    // stockInformation.topHoldingCountries = await Promise.all(
-    //   topCountriesRows.map(async (row) => {
-    //     const countryName = await row.$(
-    //       `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.country})`
-    //     );
-    //     const countryPercentage = await row.$(
-    //       `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.percentage})`
-    //     );
-    //     return {
-    //       name: countryName
-    //         ? await countryName.evaluate((el) => el.innerText)
-    //         : "",
-    //       percentage: countryPercentage
-    //         ? parseFloat(await countryPercentage.evaluate((el) => el.innerText))
-    //         : 0,
-    //     };
-    //   })
-    // );
-    // stockInformation.topHoldingCountries.sort(
-    //   (a, b) => b.percentage - a.percentage
-    // );
     stockInformation.topHoldingCountries = await getCellsTextFromTableRows({
         page,
         rowSelector: SELECTORS.stockPage.portfolio.country.row,

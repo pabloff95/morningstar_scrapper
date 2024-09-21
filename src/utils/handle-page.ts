@@ -95,10 +95,49 @@ const getCellsTextFromTableRows = async ({
   return cellsData;
 };
 
+const getCellsTextFromSingeRow = async ({
+  page,
+  rowSelector,
+  cellSelectors,
+}: {
+  page: Page;
+  rowSelector: string;
+  cellSelectors: { [key: string]: number };
+}): Promise<any> => {
+  await page.waitForSelector(rowSelector, {
+    visible: true,
+  });
+
+  const rowElement = await page.$(rowSelector);
+
+  return page.evaluate(
+    (element, cellSelectors) => {
+      if (!element) {
+        return {};
+      }
+
+      const result: CellData = {};
+
+      for (const [key, cellIndex] of Object.entries(cellSelectors)) {
+        const cellElement: HTMLElement = element?.querySelector(
+          `td:nth-child(${cellIndex})`
+        ) as HTMLElement;
+
+        result[key] = cellElement ? cellElement.innerText : "-";
+      }
+
+      return result;
+    },
+    rowElement,
+    cellSelectors
+  );
+};
+
 export {
   getText,
   getNumber,
   navigateToPage,
   getCellsTextFromTableRows,
+  getCellsTextFromSingeRow,
   CellData,
 };
