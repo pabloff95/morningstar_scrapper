@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+import { getText, getNumber, navigateToPage } from "../utils/handle-page.js";
 const SELECTORS = {
     homePage: {
         headerImage: 'a[href="/"] > img',
@@ -93,15 +94,15 @@ const scrapMorningstar = async (stockTicket) => {
     await page.click(SELECTORS.searchPage.stockLink);
     // Collect data from the stock page
     // - Title
-    await page.waitForSelector(SELECTORS.stockPage.stockName);
-    stockInformation.name = await page
-        .evaluate((element) => element === null || element === void 0 ? void 0 : element.textContent, await page.$(SELECTORS.stockPage.stockName))
-        .then((name) => cleanString(name));
+    stockInformation.name = await getText({
+        page,
+        selector: SELECTORS.stockPage.stockName,
+    });
     // - Dividend strategy and yield
-    await page.waitForSelector(SELECTORS.stockPage.dividendStrategy);
-    const dividendTwelveMonthsYield = await page
-        .evaluate((element) => element === null || element === void 0 ? void 0 : element.textContent, await page.$(SELECTORS.stockPage.dividendStrategy))
-        .then((text) => cleanString(text));
+    const dividendTwelveMonthsYield = await getText({
+        page,
+        selector: SELECTORS.stockPage.dividendStrategy,
+    });
     stockInformation.dividend = {
         strategy: dividendTwelveMonthsYield === "—"
             ? dividendStrategy.DIST
@@ -131,12 +132,15 @@ const scrapMorningstar = async (stockTicket) => {
     }));
     stockInformation.holdings.sort((a, b) => b.portfolioWeight - a.portfolioWeight);
     // - Assets on top 10 holdings
-    await page.waitForSelector(SELECTORS.stockPage.assetsInTopTenHoldings);
-    stockInformation.assetsInTopTenHoldings = await page
-        .evaluate((element) => element === null || element === void 0 ? void 0 : element.textContent, await page.$(SELECTORS.stockPage.assetsInTopTenHoldings))
-        .then((assetsPercentage) => parseFloat(assetsPercentage || ""));
+    stockInformation.assetsInTopTenHoldings = await getNumber({
+        page,
+        selector: SELECTORS.stockPage.assetsInTopTenHoldings,
+    });
     // - Navigate to performance sub-tab and get the performance track
-    await page.click(SELECTORS.stockPage.performance.linkButton);
+    await navigateToPage({
+        page,
+        selector: SELECTORS.stockPage.performance.linkButton,
+    });
     await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
         visible: true,
     });
@@ -165,7 +169,10 @@ const scrapMorningstar = async (stockTicket) => {
         };
     }, performanceReturnsRow, SELECTORS);
     // - Navigate to portfolio sub-tab and get the country weights
-    await page.click(SELECTORS.stockPage.portfolio.linkButton);
+    await navigateToPage({
+        page,
+        selector: SELECTORS.stockPage.portfolio.linkButton,
+    });
     await page.waitForSelector(SELECTORS.stockPage.portfolio.country.button);
     const countryButton = await page.$(SELECTORS.stockPage.portfolio.country.button);
     await (countryButton === null || countryButton === void 0 ? void 0 : countryButton.evaluate((b) => b.click()));
@@ -185,10 +192,10 @@ const scrapMorningstar = async (stockTicket) => {
     }));
     stockInformation.topHoldingCountries.sort((a, b) => b.percentage - a.percentage);
     // - Get total holdings
-    await page.waitForSelector(SELECTORS.stockPage.portfolio.totalHoldings);
-    stockInformation.totalHoldings = await page
-        .evaluate((element) => element === null || element === void 0 ? void 0 : element.textContent, await page.$(SELECTORS.stockPage.portfolio.totalHoldings))
-        .then((name) => parseInt(name || ""));
+    stockInformation.totalHoldings = await getNumber({
+        page,
+        selector: SELECTORS.stockPage.portfolio.totalHoldings,
+    });
     await page.screenshot({ path: "./output/screenshot.png" }); // TODO: keep this only temporary for debugging purposes, remove when finished
     await browser.close();
     return stockInformation;
