@@ -24,7 +24,7 @@ const SELECTORS: Selectors = {
     stockName: "header > div > div > h1",
     topHoldingCompany: {
       row: "tbody > tr:has(> td > a)",
-      companyCell: {
+      cell: {
         name: 1,
         weight: 2,
         sector: 4,
@@ -38,12 +38,25 @@ const SELECTORS: Selectors = {
       country: {
         button: "button#country",
         row: "table.sal-country-exposure__country-table > tbody > tr",
-        companyCell: {
+        cell: {
           country: 1,
           percentage: 2,
         },
       },
       totalHoldings: "div.holdings-summary:nth-of-type(1) .sal-dp-value",
+    },
+    performance: {
+      linkButton: "li#etf__tab-performance > a",
+      totalReturn: {
+        row: ".mds-table__scroller__sal > table > tbody > tr:nth-of-type(1)",
+        cell: {
+          yearOne: 7,
+          yearThree: 8,
+          yearFive: 9,
+          yearTen: 10,
+          yearFifteen: 11,
+        },
+      },
     },
   },
 };
@@ -64,6 +77,14 @@ enum dividendStrategy {
   ACC = "ACC",
 }
 
+type performance = {
+  yearOne: number | string;
+  yearThree: number | string;
+  yearFive: number | string;
+  yearTen: number | string;
+  yearFifteen: number | string;
+};
+
 interface StockInformation {
   name: string;
   ticket: string;
@@ -75,6 +96,7 @@ interface StockInformation {
   holdings: company[];
   assetsInTopTenHoldings: number;
   topHoldingCountries: countryWeight[];
+  performance: performance;
 }
 
 const cleanString = (text: string | null | undefined): string => {
@@ -99,6 +121,13 @@ const scrapMorningstar: (
     holdings: [],
     assetsInTopTenHoldings: 0,
     topHoldingCountries: [],
+    performance: {
+      yearOne: "-",
+      yearThree: "-",
+      yearFive: "-",
+      yearTen: "-",
+      yearFifteen: "-",
+    },
   };
 
   const browser: Browser = await puppeteer.launch({
@@ -159,13 +188,13 @@ const scrapMorningstar: (
   stockInformation.holdings = await Promise.all(
     topHoldingCompanyRows.map(async (row) => {
       const companyName = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.companyCell.name})`
+        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.name})`
       );
       const companyPortfolioWeight = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.companyCell.weight})`
+        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.weight})`
       );
       const companySector = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.companyCell.sector})`
+        `td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.sector})`
       );
       return {
         name: companyName
@@ -195,6 +224,56 @@ const scrapMorningstar: (
     )
     .then((assetsPercentage) => parseFloat(assetsPercentage || ""));
 
+  // - Navigate to performance sub-tab and get the performance track
+  await page.click(SELECTORS.stockPage.performance.linkButton);
+  await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
+    visible: true,
+  });
+
+  const performanceReturnsRow = await page.$(
+    SELECTORS.stockPage.performance.totalReturn.row
+  );
+
+  stockInformation.performance = await page.evaluate(
+    (element, SELECTORS) => {
+      if (!element) {
+        return {
+          yearOne: "-",
+          yearThree: "-",
+          yearFive: "-",
+          yearTen: "-",
+          yearFifteen: "-",
+        };
+      }
+
+      const yearOne: HTMLElement = element?.querySelector(
+        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearOne})`
+      ) as HTMLElement;
+      const yearThree: HTMLElement = element?.querySelector(
+        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearThree})`
+      ) as HTMLElement;
+      const yearFive: HTMLElement = element?.querySelector(
+        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFive})`
+      ) as HTMLElement;
+      const yearTen: HTMLElement = element?.querySelector(
+        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearTen})`
+      ) as HTMLElement;
+      const yearFifteen: HTMLElement = element?.querySelector(
+        `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen})`
+      ) as HTMLElement;
+
+      return {
+        yearOne: yearOne ? parseFloat(yearOne.innerText) : "-",
+        yearThree: yearThree ? parseFloat(yearThree.innerText) : "-",
+        yearFive: yearFive ? parseFloat(yearFive.innerText) : "-",
+        yearTen: yearTen ? parseFloat(yearTen.innerText) : "-",
+        yearFifteen: yearFifteen ? parseFloat(yearFifteen.innerText) : "-",
+      };
+    },
+    performanceReturnsRow,
+    SELECTORS
+  );
+
   // - Navigate to portfolio sub-tab and get the country weights
   await page.click(SELECTORS.stockPage.portfolio.linkButton);
 
@@ -213,10 +292,10 @@ const scrapMorningstar: (
   stockInformation.topHoldingCountries = await Promise.all(
     topCountriesRows.map(async (row) => {
       const countryName = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.portfolio.country.companyCell.country})`
+        `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.country})`
       );
       const countryPercentage = await row.$(
-        `td:nth-child(${SELECTORS.stockPage.portfolio.country.companyCell.percentage})`
+        `td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.percentage})`
       );
       return {
         name: countryName

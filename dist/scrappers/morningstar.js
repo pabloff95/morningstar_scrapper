@@ -11,7 +11,7 @@ const SELECTORS = {
         stockName: "header > div > div > h1",
         topHoldingCompany: {
             row: "tbody > tr:has(> td > a)",
-            companyCell: {
+            cell: {
                 name: 1,
                 weight: 2,
                 sector: 4,
@@ -24,12 +24,25 @@ const SELECTORS = {
             country: {
                 button: "button#country",
                 row: "table.sal-country-exposure__country-table > tbody > tr",
-                companyCell: {
+                cell: {
                     country: 1,
                     percentage: 2,
                 },
             },
             totalHoldings: "div.holdings-summary:nth-of-type(1) .sal-dp-value",
+        },
+        performance: {
+            linkButton: "li#etf__tab-performance > a",
+            totalReturn: {
+                row: ".mds-table__scroller__sal > table > tbody > tr:nth-of-type(1)",
+                cell: {
+                    yearOne: 7,
+                    yearThree: 8,
+                    yearFive: 9,
+                    yearTen: 10,
+                    yearFifteen: 11,
+                },
+            },
         },
     },
 };
@@ -56,6 +69,13 @@ const scrapMorningstar = async (stockTicket) => {
         holdings: [],
         assetsInTopTenHoldings: 0,
         topHoldingCountries: [],
+        performance: {
+            yearOne: "-",
+            yearThree: "-",
+            yearFive: "-",
+            yearTen: "-",
+            yearFifteen: "-",
+        },
     };
     const browser = await puppeteer.launch({
         headless: false,
@@ -94,9 +114,9 @@ const scrapMorningstar = async (stockTicket) => {
     await page.waitForSelector(SELECTORS.stockPage.topHoldingCompany.row);
     const topHoldingCompanyRows = await page.$$(SELECTORS.stockPage.topHoldingCompany.row);
     stockInformation.holdings = await Promise.all(topHoldingCompanyRows.map(async (row) => {
-        const companyName = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.companyCell.name})`);
-        const companyPortfolioWeight = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.companyCell.weight})`);
-        const companySector = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.companyCell.sector})`);
+        const companyName = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.name})`);
+        const companyPortfolioWeight = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.weight})`);
+        const companySector = await row.$(`td:nth-child(${SELECTORS.stockPage.topHoldingCompany.cell.sector})`);
         return {
             name: companyName
                 ? await companyName.evaluate((el) => el.innerText)
@@ -115,6 +135,35 @@ const scrapMorningstar = async (stockTicket) => {
     stockInformation.assetsInTopTenHoldings = await page
         .evaluate((element) => element === null || element === void 0 ? void 0 : element.textContent, await page.$(SELECTORS.stockPage.assetsInTopTenHoldings))
         .then((assetsPercentage) => parseFloat(assetsPercentage || ""));
+    // - Navigate to performance sub-tab and get the performance track
+    await page.click(SELECTORS.stockPage.performance.linkButton);
+    await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
+        visible: true,
+    });
+    const performanceReturnsRow = await page.$(SELECTORS.stockPage.performance.totalReturn.row);
+    stockInformation.performance = await page.evaluate((element, SELECTORS) => {
+        if (!element) {
+            return {
+                yearOne: "-",
+                yearThree: "-",
+                yearFive: "-",
+                yearTen: "-",
+                yearFifteen: "-",
+            };
+        }
+        const yearOne = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearOne})`);
+        const yearThree = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearThree})`);
+        const yearFive = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFive})`);
+        const yearTen = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearTen})`);
+        const yearFifteen = element === null || element === void 0 ? void 0 : element.querySelector(`td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen})`);
+        return {
+            yearOne: yearOne ? parseFloat(yearOne.innerText) : "-",
+            yearThree: yearThree ? parseFloat(yearThree.innerText) : "-",
+            yearFive: yearFive ? parseFloat(yearFive.innerText) : "-",
+            yearTen: yearTen ? parseFloat(yearTen.innerText) : "-",
+            yearFifteen: yearFifteen ? parseFloat(yearFifteen.innerText) : "-",
+        };
+    }, performanceReturnsRow, SELECTORS);
     // - Navigate to portfolio sub-tab and get the country weights
     await page.click(SELECTORS.stockPage.portfolio.linkButton);
     await page.waitForSelector(SELECTORS.stockPage.portfolio.country.button);
@@ -123,8 +172,8 @@ const scrapMorningstar = async (stockTicket) => {
     await page.waitForSelector(SELECTORS.stockPage.portfolio.country.row);
     const topCountriesRows = await page.$$(SELECTORS.stockPage.portfolio.country.row);
     stockInformation.topHoldingCountries = await Promise.all(topCountriesRows.map(async (row) => {
-        const countryName = await row.$(`td:nth-child(${SELECTORS.stockPage.portfolio.country.companyCell.country})`);
-        const countryPercentage = await row.$(`td:nth-child(${SELECTORS.stockPage.portfolio.country.companyCell.percentage})`);
+        const countryName = await row.$(`td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.country})`);
+        const countryPercentage = await row.$(`td:nth-child(${SELECTORS.stockPage.portfolio.country.cell.percentage})`);
         return {
             name: countryName
                 ? await countryName.evaluate((el) => el.innerText)
