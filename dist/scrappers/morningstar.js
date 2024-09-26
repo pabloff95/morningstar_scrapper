@@ -31,6 +31,20 @@ const SELECTORS = {
                 },
             },
             totalHoldings: "div.holdings-summary:nth-of-type(1) .sal-dp-value",
+            price: {
+                per: {
+                    row: "div.sal-measures__value-table > * tbody > tr.sal-measures__table-data:nth-of-type(1)",
+                    stock: 2,
+                    category: 3,
+                    index: 4,
+                },
+                priceCashFlow: {
+                    row: "div.sal-measures__value-table > * tbody > tr.sal-measures__table-data:nth-of-type(4)",
+                    stock: 2,
+                    category: 3,
+                    index: 4,
+                },
+            },
         },
         performance: {
             linkButton: "li#etf__tab-performance > a",
@@ -44,6 +58,10 @@ const SELECTORS = {
                     yearFifteen: 11,
                 },
             },
+        },
+        people: {
+            linkButton: "li#etf__tab-people > a",
+            fundingDate: "div.sal-people-summary__dps > div:nth-of-type(1)  > div.sal-pillar-dp__value--large",
         },
     },
 };
@@ -71,19 +89,27 @@ const scrapMorningstar = async (stockTicket) => {
             yearTen: "-",
             yearFifteen: "-",
         },
+        fundingDate: "",
+        price: {
+            per: {
+                stock: 0,
+                category: 0,
+                referenceIndex: 0,
+            },
+            priceCashFlow: {
+                stock: 0,
+                category: 0,
+                referenceIndex: 0,
+            },
+        },
     };
     const browser = await puppeteer.launch({
         headless: false,
         defaultViewport: null,
     });
     const page = await browser.newPage();
-    // Navigate and search input
-    await page.goto("https://www.morningstar.com/");
-    await page.waitForSelector(SELECTORS.homePage.searchInput);
-    await page.click(SELECTORS.homePage.searchInput);
-    await page.type(SELECTORS.homePage.searchInput, stockTicket);
-    await page.keyboard.press("Enter");
-    // Click on search list item
+    // Navigate and click on search list item
+    await page.goto(`https://www.morningstar.com/search?query=${stockTicket}`);
     await page.waitForSelector(SELECTORS.searchPage.stockLink);
     await page.click(SELECTORS.searchPage.stockLink);
     // Collect data from the stock page
@@ -99,8 +125,8 @@ const scrapMorningstar = async (stockTicket) => {
     });
     stockInformation.dividend = {
         strategy: dividendTwelveMonthsYield === "—"
-            ? dividendStrategy.DIST
-            : dividendStrategy.ACC,
+            ? dividendStrategy.ACC
+            : dividendStrategy.DIST,
         yield: dividendTwelveMonthsYield === "—"
             ? null
             : parseFloat(dividendTwelveMonthsYield),
@@ -137,49 +163,15 @@ const scrapMorningstar = async (stockTicket) => {
             yearFifteen: SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen,
         },
     });
-    // await page.waitForSelector(SELECTORS.stockPage.performance.totalReturn.row, {
-    //   visible: true,
-    // });
-    // const performanceReturnsRow = await page.$(
-    //   SELECTORS.stockPage.performance.totalReturn.row
-    // );
-    // stockInformation.performance = await page.evaluate(
-    //   (element, SELECTORS) => {
-    //     if (!element) {
-    //       return {
-    //         yearOne: "-",
-    //         yearThree: "-",
-    //         yearFive: "-",
-    //         yearTen: "-",
-    //         yearFifteen: "-",
-    //       };
-    //     }
-    //     const yearOne: HTMLElement = element?.querySelector(
-    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearOne})`
-    //     ) as HTMLElement;
-    //     const yearThree: HTMLElement = element?.querySelector(
-    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearThree})`
-    //     ) as HTMLElement;
-    //     const yearFive: HTMLElement = element?.querySelector(
-    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFive})`
-    //     ) as HTMLElement;
-    //     const yearTen: HTMLElement = element?.querySelector(
-    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearTen})`
-    //     ) as HTMLElement;
-    //     const yearFifteen: HTMLElement = element?.querySelector(
-    //       `td:nth-child(${SELECTORS.stockPage.performance.totalReturn.cell.yearFifteen})`
-    //     ) as HTMLElement;
-    //     return {
-    //       yearOne: yearOne ? parseFloat(yearOne.innerText) : "-",
-    //       yearThree: yearThree ? parseFloat(yearThree.innerText) : "-",
-    //       yearFive: yearFive ? parseFloat(yearFive.innerText) : "-",
-    //       yearTen: yearTen ? parseFloat(yearTen.innerText) : "-",
-    //       yearFifteen: yearFifteen ? parseFloat(yearFifteen.innerText) : "-",
-    //     };
-    //   },
-    //   performanceReturnsRow,
-    //   SELECTORS
-    // );
+    // - Navigate to parent sub-tab and get the funding year
+    await navigateToPage({
+        page,
+        selector: SELECTORS.stockPage.people.linkButton,
+    });
+    stockInformation.fundingDate = await getText({
+        page,
+        selector: SELECTORS.stockPage.people.fundingDate,
+    });
     // - Navigate to portfolio sub-tab and get the country weights
     await navigateToPage({
         page,
@@ -196,6 +188,24 @@ const scrapMorningstar = async (stockTicket) => {
             percentage: SELECTORS.stockPage.portfolio.country.cell.percentage,
         },
         orderByKey: "topHoldingCountries",
+    });
+    stockInformation.price.per = await getCellsTextFromSingeRow({
+        page,
+        rowSelector: SELECTORS.stockPage.portfolio.price.per.row,
+        cellSelectors: {
+            stock: SELECTORS.stockPage.portfolio.price.per.stock,
+            category: SELECTORS.stockPage.portfolio.price.per.category,
+            referenceIndex: SELECTORS.stockPage.portfolio.price.per.index,
+        },
+    });
+    stockInformation.price.priceCashFlow = await getCellsTextFromSingeRow({
+        page,
+        rowSelector: SELECTORS.stockPage.portfolio.price.priceCashFlow.row,
+        cellSelectors: {
+            stock: SELECTORS.stockPage.portfolio.price.priceCashFlow.stock,
+            category: SELECTORS.stockPage.portfolio.price.priceCashFlow.category,
+            referenceIndex: SELECTORS.stockPage.portfolio.price.priceCashFlow.index,
+        },
     });
     // - Get total holdings
     stockInformation.totalHoldings = await getNumber({

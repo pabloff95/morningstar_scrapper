@@ -52,6 +52,20 @@ const SELECTORS: Selectors = {
         },
       },
       totalHoldings: "div.holdings-summary:nth-of-type(1) .sal-dp-value",
+      price: {
+        per: {
+          row: "div.sal-measures__value-table > * tbody > tr.sal-measures__table-data:nth-of-type(1)",
+          stock: 2,
+          category: 3,
+          index: 4,
+        },
+        priceCashFlow: {
+          row: "div.sal-measures__value-table > * tbody > tr.sal-measures__table-data:nth-of-type(4)",
+          stock: 2,
+          category: 3,
+          index: 4,
+        },
+      },
     },
     performance: {
       linkButton: "li#etf__tab-performance > a",
@@ -65,6 +79,11 @@ const SELECTORS: Selectors = {
           yearFifteen: 11,
         },
       },
+    },
+    people: {
+      linkButton: "li#etf__tab-people > a",
+      fundingDate:
+        "div.sal-people-summary__dps > div:nth-of-type(1)  > div.sal-pillar-dp__value--large",
     },
   },
 };
@@ -94,6 +113,19 @@ interface StockInformation {
   assetsInTopTenHoldings: number;
   topHoldingCountries: CellData[];
   performance: performance;
+  fundingDate: string;
+  price: {
+    per: {
+      stock: number;
+      category: number;
+      referenceIndex: number;
+    };
+    priceCashFlow: {
+      stock: number;
+      category: number;
+      referenceIndex: number;
+    };
+  };
 }
 
 const scrapMorningstar: (
@@ -117,6 +149,19 @@ const scrapMorningstar: (
       yearTen: "-",
       yearFifteen: "-",
     },
+    fundingDate: "",
+    price: {
+      per: {
+        stock: 0,
+        category: 0,
+        referenceIndex: 0,
+      },
+      priceCashFlow: {
+        stock: 0,
+        category: 0,
+        referenceIndex: 0,
+      },
+    },
   };
 
   const browser: Browser = await puppeteer.launch({
@@ -125,14 +170,8 @@ const scrapMorningstar: (
   });
   const page: Page = await browser.newPage();
 
-  // Navigate and search input
-  await page.goto("https://www.morningstar.com/");
-  await page.waitForSelector(SELECTORS.homePage.searchInput);
-  await page.click(SELECTORS.homePage.searchInput);
-  await page.type(SELECTORS.homePage.searchInput, stockTicket);
-  await page.keyboard.press("Enter");
-
-  // Click on search list item
+  // Navigate and click on search list item
+  await page.goto(`https://www.morningstar.com/search?query=${stockTicket}`);
   await page.waitForSelector(SELECTORS.searchPage.stockLink);
   await page.click(SELECTORS.searchPage.stockLink);
 
@@ -152,8 +191,8 @@ const scrapMorningstar: (
   stockInformation.dividend = {
     strategy:
       dividendTwelveMonthsYield === "—"
-        ? dividendStrategy.DIST
-        : dividendStrategy.ACC,
+        ? dividendStrategy.ACC
+        : dividendStrategy.DIST,
     yield:
       dividendTwelveMonthsYield === "—"
         ? null
@@ -196,6 +235,17 @@ const scrapMorningstar: (
     },
   });
 
+  // - Navigate to parent sub-tab and get the funding year
+  await navigateToPage({
+    page,
+    selector: SELECTORS.stockPage.people.linkButton,
+  });
+
+  stockInformation.fundingDate = await getText({
+    page,
+    selector: SELECTORS.stockPage.people.fundingDate,
+  });
+
   // - Navigate to portfolio sub-tab and get the country weights
   await navigateToPage({
     page,
@@ -219,13 +269,31 @@ const scrapMorningstar: (
     orderByKey: "topHoldingCountries",
   });
 
+  stockInformation.price.per = await getCellsTextFromSingeRow({
+    page,
+    rowSelector: SELECTORS.stockPage.portfolio.price.per.row,
+    cellSelectors: {
+      stock: SELECTORS.stockPage.portfolio.price.per.stock,
+      category: SELECTORS.stockPage.portfolio.price.per.category,
+      referenceIndex: SELECTORS.stockPage.portfolio.price.per.index,
+    },
+  });
+
+  stockInformation.price.priceCashFlow = await getCellsTextFromSingeRow({
+    page,
+    rowSelector: SELECTORS.stockPage.portfolio.price.priceCashFlow.row,
+    cellSelectors: {
+      stock: SELECTORS.stockPage.portfolio.price.priceCashFlow.stock,
+      category: SELECTORS.stockPage.portfolio.price.priceCashFlow.category,
+      referenceIndex: SELECTORS.stockPage.portfolio.price.priceCashFlow.index,
+    },
+  });
+
   // - Get total holdings
   stockInformation.totalHoldings = await getNumber({
     page,
     selector: SELECTORS.stockPage.portfolio.totalHoldings,
   });
-
-  await page.screenshot({ path: "./output/screenshot.png" }); // TODO: keep this only temporary for debugging purposes, remove when finished
 
   await browser.close();
 
